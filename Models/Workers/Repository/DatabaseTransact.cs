@@ -25,10 +25,6 @@
             }
         }
 
-        public void Save()
-        {
-            _entities.SaveChanges();
-        }
         
     }
 }

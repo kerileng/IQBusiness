@@ -9,54 +9,59 @@ using System.Web;
 using System.Web.Mvc;
 using EmployeeManagement;
 using System.Net.Http;
+using System.Runtime.Remoting.Contexts;
 
 namespace EmployeeManagement.Controllers
 {
     public class EmployeesController : Controller
     {
-        private IQBusinessEntities db = new IQBusinessEntities();
+        private static readonly IQBusinessEntities db = new IQBusinessEntities();
 
-        // GET: Employees
-        public async Task<ActionResult> Index()
+        public ActionResult Index()
         {
-            //await (0);
-            return  View();
-        }
-
-        public async Task<ActionResult> Index(Employee emp)
-        {
-            HttpClient client = new HttpClient();
-            client.BaseAddress = new Uri(@"https://localhost:44336/api/Employee/");
-
-            var postqry = client.PostAsJsonAsync<Employee>("employee", emp);
-            postqry.Wait();
-
-            var result = postqry.Result;
-
-            if(result.IsSuccessStatusCode)
+            IList<Employee> employees = null;
+            HttpClient client = null;
+            try
             {
-                return Redirect("Index"); 
+                if (ModelState.IsValid)
+                {
+                    client = new HttpClient
+                    {
+                        BaseAddress = new Uri("https://localhost:44336/api/")
+                    };
+
+                    var getEmpResponse = client.GetAsync("employee");
+                    getEmpResponse.Wait();
+
+                    var result = getEmpResponse.Result;
+                    if (result.IsSuccessStatusCode)
+                    {
+                        var readTask = result.Content.ReadAsAsync<IList<Employee>>();
+                        readTask.Wait();
+
+                        employees = readTask.Result;
+                    }
+                    else //web api sent error response 
+                    {
+                        //log response status here..
+
+                        employees = null;
+
+                        ModelState.AddModelError(string.Empty, "Server error. Please contact administrator.");
+                    }
+                }
             }
-            ModelState.AddModelError(string.Empty, "Server Error. Please contact administrator.");
-
-            return View(emp);
-        }
-
-        public ActionResult Details()
-        {
-            return View();
-        }
-
-        // GET: Employees/Details/5
-        public async Task<ActionResult> Details(int i)
-        {
-            IQueryable<Employee> employee = (IQueryable<Employee>) await db.Employees.ToListAsync<Employee>();
-            if (employee == null)
+            catch(Exception ex)
             {
-                return HttpNotFound();
+                ex.ToString();
             }
-            return View(employee);
+            finally
+            {
+                client.Dispose();
+            }
+            return View(employees);
         }
+
 
         // GET: Employees/Create
         public ActionResult Create()
@@ -64,79 +69,119 @@ namespace EmployeeManagement.Controllers
             return View();
         }
 
-        // POST: Employees/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details see https://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Create([Bind(Include = "EmpID,Name,Age,Gender,Address,CurrentProject")] Employee employee)
+        public ActionResult Create(Employee emp)
         {
             if (ModelState.IsValid)
             {
-                db.Employees.Add(employee);
-                await db.SaveChangesAsync();
-                return RedirectToAction("Index");
+                HttpClient client = new HttpClient
+                {
+                    BaseAddress = new Uri(@"https://localhost:44336/api/")
+                };
+
+                var createResponse = client.PostAsJsonAsync<Employee>("employee", emp);
+                createResponse.Wait();
+
+                var result = createResponse.Result;
+
+                if (result.IsSuccessStatusCode)
+                {
+                    return Redirect("Index");
+                }
+                ModelState.AddModelError(string.Empty, "Server Error. Please contact administrator.");
             }
 
-            return View(employee);
+            return View("Index");
         }
-
-
-        // GET: Employees/Edit/5
-        public async Task<ActionResult> Edit(int? id)
+        [HttpGet]
+        public ActionResult Edit(int id)
         {
-            if (id == null)
-            {
-                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
-            }
-            Employee employee = await db.Employees.FindAsync(id);
-            if (employee == null)
-            {
-                return HttpNotFound();
-            }
-            return View(employee);
+            Employee emp = EmpById(id);
+
+            return View(emp);
         }
 
-        // POST: Employees/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details see https://go.microsoft.com/fwlink/?LinkId=317598.
+        public Employee EmpById(int id)
+        {
+            Employee emp = null;
+
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(@"https://localhost:44336/api/");
+                //HTTP GET
+                var editResponse = client.GetAsync
+                    ($"employee?id={id}");
+                editResponse.Wait();
+
+                var result = editResponse.Result;
+                if (result.IsSuccessStatusCode)
+                {
+                    var readTask = result.Content.ReadAsAsync<Employee>();
+                    readTask.Wait();
+
+                    emp = readTask.Result;
+                }
+            }
+            return emp;
+        }
+
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Edit([Bind(Include = "EmpID,Name,Age,Gender,Address,CurrentProject")] Employee employee)
+        public ActionResult Edit(Employee emp)
         {
-            if (ModelState.IsValid)
+            using (var client = new HttpClient())
             {
-                db.Entry(employee).State = EntityState.Modified;
-                await db.SaveChangesAsync();
-                return RedirectToAction("Index");
+                client.BaseAddress = new Uri(@"https://localhost:44336/api/");
+
+                //HTTP POST
+                var putResponse = client.PutAsJsonAsync<Employee>("employee", emp);
+                putResponse.Wait();
+
+                var result = putResponse.Result;
+                if (result.IsSuccessStatusCode)
+                {
+
+                    return RedirectToAction("Index");
+                }
+                
             }
-            return View(employee);
+            return View(emp);
         }
 
-        // GET: Employees/Delete/5
-        public async Task<ActionResult> Delete(int? id)
+       /* [HttpGet]
+        public ActionResult Delete(int id)
         {
-            if (id == null)
+           
+            var emp = EmpById(id);
+            TempData["id"] = emp.EmpID;
+            return View(emp);
+        }*/
+     
+
+        public ActionResult Delete(int id)
+        {
+            var emp = EmpById(id);
+
+
+            if (id == 0)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Employee employee = await db.Employees.FindAsync(id);
-            if (employee == null)
+
+            HttpClient client = new HttpClient
+            {
+                BaseAddress = new Uri(@"https://localhost:44336/api/")
+            };
+
+            var delqry = client.DeleteAsync($"employee?id={id}");
+            var results = delqry.Result;
+
+            if (results == null)
             {
                 return HttpNotFound();
             }
-            return View(employee);
-        }
 
-        // POST: Employees/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> DeleteConfirmed(int id)
-        {
-            Employee employee = await db.Employees.FindAsync(id);
-            db.Employees.Remove(employee);
-            await db.SaveChangesAsync();
-            return RedirectToAction("Index");
+            ViewBag.Message = $"Employee {emp.EmpID} {emp.Name} was successfully deleted";
+            return View();
         }
 
         protected override void Dispose(bool disposing)
