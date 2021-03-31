@@ -1,0 +1,3 @@
+[{"Name":"Vivian","Age":38,"Address":"161 Poinsettia close","CurrentProjects":"Test Project"},
+ {"Name":"Phakamile","Age":38,"Address":"161 Poinsettia close","CurrentProjects":"Electrical Project"},
+ {"Name":"Tshego","Age":9,"Address":"1355 ext 2","CurrentProjects":"ITProject"}]
